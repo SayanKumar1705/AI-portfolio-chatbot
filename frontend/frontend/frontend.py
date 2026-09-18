@@ -27,7 +27,7 @@ class State(rx.State):
         async with httpx.AsyncClient() as client:
             async with client.stream(
                 "POST",
-                "http://127.0.0.1:8080/chat",
+                "https://ai-portfolio-chatbot-lsan.onrender.com/chat",
                 json={"question": user_question},
             ) as response:
                 async for chunk in response.aiter_text():
