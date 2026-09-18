@@ -10,6 +10,7 @@ class State(rx.State):
     """The app state."""
     question: str = ""
     messages: list[str] = []
+    history: list[dict] = []
 
     def set_question_text(self, value: str):
         self.question = value
@@ -24,28 +25,36 @@ class State(rx.State):
         )
 
         buffer = ""
-        async with httpx.AsyncClient() as client:
-            async with client.stream(
-                "POST",
-                "https://ai-portfolio-chatbot-lsan.onrender.com/chat",
-                json={"question": user_question},
-            ) as response:
-                async for chunk in response.aiter_text():
-                    buffer += chunk
-                    if len(buffer) > 5:
-                        self.messages[-1] += buffer
-                        buffer = ""
-                        yield rx.call_script(
-                            "document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight"
-                        )
-        if buffer:
-            self.messages[-1] += buffer
-            yield rx.call_script(
-                "document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight"
-            )
+        try:
+            async with httpx.AsyncClient(timeout=60.0) as client:
+                async with client.stream(
+                    "POST",
+                    "https://ai-portfolio-chatbot-lsan.onrender.com/chat",
+                    json={"question": user_question, "history": self.history},
+                ) as response:
+                    async for chunk in response.aiter_text():
+                        buffer += chunk
+                        if len(buffer) > 5:
+                            self.messages[-1] += buffer
+                            buffer = ""
+                            yield rx.call_script(
+                                "document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight"
+                            )
+            if buffer:
+                self.messages[-1] += buffer
+                yield rx.call_script(
+                    "document.getElementById('chat-box').scrollTop = document.getElementById('chat-box').scrollHeight"
+                )
+        except Exception:
+            self.messages[-1] = "AI: Sorry, I'm having trouble responding right now. Please try again in a moment."
+            yield
+
+        self.history.append({"role": "user", "content": user_question})
+        self.history.append({"role": "assistant", "content": self.messages[-1]})
 
     def clear_chat(self):
         self.messages = []
+        self.history = []
 
 
 def message_bubble(msg: str) -> rx.Component:
